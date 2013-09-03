@@ -57,7 +57,7 @@ sub _prepare {
         }
         if ($cmds{contain}) {
             $self->_prepare($rule->{contain});
-            $rule->{depends} = $self->_contain_depends($rule->{contain});
+            $rule->{depends} = $self->_resolve_depends($rule->{contain});
             next;
         }
 
@@ -96,7 +96,7 @@ sub _process {
     for my $name (sort keys %$rules) {
         my $rule = $rules->{$name};
 
-        if (exists $rule->{from} && exists $rule->{via}) {
+        if (exists $rule->{via}) {
             $self->via($name, $rule, $before, \%after);
         }
         elsif (exists $rule->{from}) {
@@ -162,7 +162,7 @@ sub contain {
     }
 }
 
-sub _contain_depends {
+sub _resolve_depends {
     my ($self, $rules) = @_;
     my @depends = ();
 
@@ -170,14 +170,14 @@ sub _contain_depends {
 
         my $contain = $rule->{contain};
         if ($contain) {
-            my $nested = $self->_contain_depends($contain);
+            my $nested = $self->_resolve_depends($contain);
             push @depends, @$nested;
         }
 
         my $from = $rule->{from};
         if ($from) {
             my $vars = $from;
-            $vars = [$vars] if (ref $from ne 'ARRAY');
+            $vars = [$vars] if (ref $vars ne 'ARRAY');
             push @depends, @$vars;
         }
     }
@@ -280,23 +280,6 @@ Convert hash structure from before value.
   #  mail => 'hixi@cpan.org',
   #}
 
-=head2 rules
-
-Print rules of internal.
-
-  my $rules = {
-      version => { from => 'version', via => sub { $_[0] + 1 }, default => 1 },
-  };
-  my $converter = Hash::Convert->new($rules);
-  print $converter->rules;
-  #(
-  #(exists $before->{version})?
-  #    (version => sub {
-  #        $_[0] + 1;
-  #    }->($before->{version})):
-  #    (version => 1),
-  #)
-
 =head1 Rules
 
 =head2 Command
@@ -314,7 +297,7 @@ Print rules of internal.
 =item from + via
 
 `via` add after method toward `from`.
-`via` can receive multiple args from `from.
+`via` can receive multiple args from `from`.
 
 Single args
 

@@ -77,23 +77,6 @@ Convert hash structure from before value.
     #  mail => 'hixi@cpan.org',
     #}
 
-## rules
-
-Print rules of internal.
-
-    my $rules = {
-        version => { from => 'version', via => sub { $_[0] + 1 }, default => 1 },
-    };
-    my $converter = Hash::Convert->new($rules);
-    print $converter->rules;
-    #(
-    #(exists $before->{version})?
-    #    (version => sub {
-    #        $_[0] + 1;
-    #    }->($before->{version})):
-    #    (version => 1),
-    #)
-
 # Rules
 
 ## Command
@@ -108,7 +91,7 @@ Print rules of internal.
 - from + via
 
     \`via\` add after method toward \`from\`.
-    \`via\` can receive multiple args from \`from.
+    \`via\` can receive multiple args from \`from\`.
 
     Single args
 
