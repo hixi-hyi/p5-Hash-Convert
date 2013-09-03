@@ -11,7 +11,6 @@ sub verify {
 
     subtest $desc => sub {
         my $converter = Hash::Convert->new($rules);
-        note explain $converter->rules;
         my $result = $converter->convert($input);
         is_deeply $result, $expects;
         note explain $result;
@@ -25,7 +24,6 @@ sub verify_hash {
 
     subtest $desc => sub {
         my $converter = Hash::Convert->new($rules);
-        note explain $converter->rules;
         my %result = $converter->convert(%{$input});
         is_deeply \%result, $expects;
         note explain \%result;
@@ -40,7 +38,6 @@ sub verify_error {
     subtest $desc => sub {
         throws_ok {
             my $converter = Hash::Convert->new($rules);
-            note explain $converter->rules;
             $converter->convert($input);
         } qr/$error/;
         done_testing;

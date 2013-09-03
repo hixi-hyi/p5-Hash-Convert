@@ -7,69 +7,35 @@ use Carp qw(croak);
 
 our $VERSION = "0.01";
 
+my $allow_combine = [
+    [qw/from/],
+    [qw/from default/],
+
+    [qw/from via/],
+    [qw/from via default/],
+
+    [qw/contain/],
+    [qw/contain default/],
+
+    [qw/define/],
+];
+
 sub new {
-    my ($class, $rules, $opts) = @_;
+    my ($class, $rules) = @_;
 
-    my $allow_combine = [
-        [qw/from/],
-        [qw/from default/],
-
-        [qw/from via/],
-        [qw/from via default/],
-
-        [qw/contain/],
-        [qw/contain default/],
-
-        [qw/define/],
-    ];
     my $self = bless {
-        rules         => undef,
-        rules_map     => undef,
-        indent        => 1,
-        formatter     => Hash::Convert::Formatter->new(),
-        allow_cmobine => $allow_combine,
+        rules         => $rules,
     }, $class;
 
-    $self->_compile($rules);
+    $self->_validate_rule($rules);
+
     $self;
-}
-
-sub rules {
-    my $self = shift;
-    $self->{rules_map};
-}
-
-sub convert {
-    my ($self, @before) = @_;
-
-    if (@before && scalar @before == 1 && ref $before[0] eq 'HASH') {
-        my %after = $self->{rules}->($before[0]);
-        return \%after;
-    }
-    elsif (@before && scalar @before % 2 == 0) {
-        my %hash  = @before;
-        my %after =  $self->{rules}->(\%hash);
-        return %after;
-    }
-    else {
-        croak 'convert require HASH or HASH ref'
-    }
-}
-
-sub _compile {
-    my ($self, $rules) = @_;
-
-    my $hash_body     = $self->_create_hash_body($rules);
-    my $hash_like_exp =$self->{formatter}->curly_parentheses($hash_body);
-
-    $self->{rules_map} = $hash_like_exp;
-    $self->{rules}     = eval "sub { my \$before = shift; return $hash_like_exp }";
 }
 
 sub _validate_cmd {
     my ($self, $cmd_map) = @_;
 
-    for my $combine (@{$self->{allow_cmobine}}) {
+    for my $combine (@{$allow_combine}) {
         my $valid = [grep { $cmd_map->{$_} } @$combine];
 
         if ( scalar @$valid == scalar keys %$cmd_map ) {
@@ -79,93 +45,121 @@ sub _validate_cmd {
     return 0;
 }
 
-sub _create_hash_body {
+sub _validate_rule {
     my ($self, $rules) = @_;
 
-    my $after;
     for my $name (sort keys %$rules) {
-        my %rule = %{$rules->{$name}};
-        my %cmds = map { $_ => 1 } keys %rule;
+        my $rule = $rules->{$name};
+        my %cmds = map { $_ => 1 } keys %{$rule};
 
         my $valid = $self->_validate_cmd(\%cmds);
         unless ($valid) {
             croak sprintf "%s rules invalid combinations (%s)", $name, join(',', sort keys %cmds);
         }
 
-        if ($cmds{from}) {
-            if ($cmds{via}) {
-                $after .= $self->via($name, \%rule);
-            }
-            else {
-                $after .= $self->from($name, \%rule);
+        if ($cmds{contain}) {
+            $self->_validate_rule($rule->{contain});
+        }
+
+        unless ($cmds{via}) {
+            if ( (ref $rule->{from} eq 'ARRAY') && (scalar @{$rule->{from}} != 1) ) {
+                croak sprintf "multiple value allowed only 'via' rule. ( from => [%s] )", join(', ', map { "'$_'" } @{$rule->{from}} );
             }
         }
-        elsif ($cmds{contain}) {
-            $after .= $self->contain($name, \%rule);
+
+        $rule->{from} = [$rule->{from}] if ($rule->{from} && ref $rule->{from} ne 'ARRAY');
+    }
+}
+
+sub convert {
+    my ($self, @before) = @_;
+
+    if (@before && scalar @before == 1 && ref $before[0] eq 'HASH') {
+        my $after = $self->_process($self->{rules}, $before[0]);
+        return $after;
+    }
+    elsif (@before && scalar @before % 2 == 0) {
+        my %hash  = @before;
+        my $after =  $self->_process($self->{rules}, \%hash);
+        return %{$after};
+    }
+    else {
+        croak 'convert require HASH or HASH ref'
+    }
+}
+
+sub _process {
+    my ($self, $rules, $before) = @_;
+
+    my %after;
+    for my $name (sort keys %$rules) {
+        my $rule = $rules->{$name};
+
+        if (exists $rule->{from} && exists $rule->{via}) {
+            $self->via($name, $rule, $before, \%after);
         }
-        elsif ($cmds{define}) {
-            $after .= $self->define($name, \%rule);
+        elsif (exists $rule->{from}) {
+            $self->from($name, $rule, $before, \%after);
+        }
+        elsif (exists $rule->{contain}) {
+            $self->contain($name, $rule, $before, \%after);
+        }
+        elsif (exists $rule->{define}) {
+            $self->define($name, $rule, $before, \%after);
         }
         else {
             # not do this
         }
     }
-    return $after;
+    return \%after;
+}
+
+sub _is_exists {
+    my ($self, $before, $names) = @_;
+
+    my $exists_size = grep { $before->{$_} } @$names;
+    if ($exists_size == scalar @$names) {
+        return 1;
+    }
+    return 0;
+}
+
+
+sub from {
+    my ($self, $name, $rule, $before, $after) = @_;
+
+    if ($self->_is_exists($before, $rule->{from})) {
+        $after->{$name} = $before->{$rule->{from}->[0]};
+    } elsif (exists $rule->{default}) {
+        $after->{$name} = $rule->{default};
+    }
 }
 
 sub via {
-    my ($self, $name, $rules) = @_;
+    my ($self, $name, $rule, $before, $after) = @_;
 
-    my $var_name = $self->_resolve_var_name($rules->{from});
-    my $vars = join(', ', @$var_name);
-    my $via = sprintf("%s->(%s)", $self->{formatter}->decode_value($rules->{via}), $vars);
-    my $hash_exp = $self->{formatter}->hash($name, $via);
-    return $self->optional($name, $hash_exp, $rules, $var_name);
-}
-
-sub from {
-    my ($self, $name, $rules) = @_;
-
-    if (ref $rules->{from} eq 'ARRAY') {
-        croak sprintf "multiple value allowed only 'via' rule. ( from => [%s] )", join(', ', map { "'$_'" } @{$rules->{from}} );
+    if ($self->_is_exists($before, $rule->{from})) {
+        my @args = map { $before->{$_} } @{$rule->{from}};
+        $after->{$name} = $rule->{via}->(@args);
+    } elsif (exists $rule->{default}) {
+        $after->{$name} = $rule->{default};
     }
-
-    my $before = $self->_resolve_var_name($rules->{from})->[0];
-    my $hash_exp = $self->{formatter}->hash($name, $before);
-    return $self->optional($name, $hash_exp, $rules, $before);
-}
-
-sub contain {
-    my ($self, $name, $rules) = @_;
-    $self->{formatter}->inc_indent;
-    my $hash_body = $self->_create_hash_body($rules->{contain});
-    my $value = $self->{formatter}->curly_brace($hash_body);
-    $self->{formatter}->dec_indent;
-    $value =~ s/\s*$//;
-    my $hash_exp = $self->{formatter}->hash($name, $value);
-    my $depends = $self->_contain_depends($rules->{contain});
-
-    return $self->optional($name, $hash_exp, $rules, $depends);
-}
-
-sub optional {
-    my ($self, $name, $value, $rules, $cond) = @_;
-
-    if (exists $rules->{default}) {
-        my $default_exp = $self->{formatter}->default($name, $rules->{default});
-        return $self->{formatter}->cond_exists($value, $cond, $default_exp);
-    }
-    else {
-        return $self->{formatter}->cond_exists($value, $cond);
-    }
-
 }
 
 sub define {
-    my ($self, $name, $rules) = @_;
+    my ($self, $name, $rule, $before, $after) = @_;
+    $after->{$name} = $rule->{define};
+}
 
-    my $string = $self->{formatter}->decode_value($rules->{define});
-    $self->{formatter}->cond_nothing($self->{formatter}->hash($name, $string));
+sub contain {
+    my ($self, $name, $rule, $before, $after) = @_;
+
+    my $depends_name = $self->_contain_depends($rule->{contain});
+    if ($self->_is_exists($before, $depends_name)) {
+        $after->{$name} = $self->_process($rule->{contain}, $before);
+    } elsif (exists $rule->{default}) {
+        $after->{$name} = $rule->{default};
+    }
 }
 
 sub _contain_depends {
@@ -182,7 +176,8 @@ sub _contain_depends {
 
         my $from = $rule->{from};
         if ($from) {
-            my $vars = $self->_resolve_var_name($from);
+            my $vars = $from;
+            $vars = [$vars] if (ref $from ne 'ARRAY');
             push @depends, @$vars;
         }
     }
@@ -190,151 +185,26 @@ sub _contain_depends {
     return \@depends;
 }
 
-sub _resolve_var_name {
-    my ($self, $args) = @_;
-
-    my $vars = $args;
-    $vars = [$args] unless (ref $args eq 'ARRAY');
-
-    my @names;
-    for my $var (@$vars) {
-        if (index($var, '.') == -1) {
-            push @names, sprintf "\$before->{%s}", $var;
-        }
-        else {
-            (my $nest_exp = $var) =~ s/\./\}\->\{/g;
-            push @names, sprintf "\$before->{%s}", $nest_exp;
-        }
-    }
-
-    \@names;
-}
-
-
-package
-    Hash::Convert::Formatter;
-use B::Deparse;
-use Data::Dumper qw(Dumper);
-$Data::Dumper::Deparse = 1;
-$Data::Dumper::Terse = 1;
-
-sub new {
-    my $class = shift;
-
-    bless {
-        indent  => 1,
-        string  => {
-            indent => "    ",
-            line   => "\n",
-        },
-    }, $class;
-}
-
-sub inc_indent {
-    my $self = shift;
-    $self->{indent} += 1;
-}
-
-sub dec_indent {
-    my $self = shift;
-    $self->{indent} -= 1;
-}
-
-sub cond_nothing {
-    my ($self, $value) = @_;
-    $self->indent($value);
-}
-
-sub cond_exists {
-    my ($self, $value, $keys, $default_exp) = @_;
-    $keys = [$keys] unless (ref $keys eq 'ARRAY');
-
-    my $pre_indent = $self->{string}->{indent} x ($self->{indent}-1);
-    my $indent = $self->{string}->{indent} x $self->{indent};
-    my $cond = join(' && ', map { "exists $_" } @$keys);
-
-    if ($default_exp) {
-        sprintf "%s(%s)?\n%s(%s):\n%s(%s),\n", $pre_indent, $cond, $indent, $value, $indent, $default_exp;
-    }
-    else {
-        sprintf "%s(%s)?\n%s(%s): (),\n", $pre_indent, $cond, $indent, $value;
-    }
-}
-
-sub default {
-    my ($self, $after, $default) = @_;
-
-    my $default_str;
-    unless ($default) {
-        $default_str = 'undef';
-    }
-    elsif (ref $default) {
-        $default_str = $self->decode_value($default);
-    }
-    elsif ($self->_is_number($default)) {
-        $default_str = $default;
-    }
-    else {
-        $default_str = "'$default'";
-    }
-    return sprintf "%s => %s", $after, $default_str;
-}
-
-sub decode_value {
-    my ($self, $ref) = @_;
-    unless (ref $ref) {
-        return $ref;
-    }
-
-    if (ref $ref eq 'CODE') {
-        my $deparse = B::Deparse->new('-P');
-        $deparse->ambient_pragmas(strict => 'all', warnings => 'all');
-        my $code   = $deparse->coderef2text($ref);
-        my $indent = $self->{string}->{indent} x ($self->{indent});
-        $code      =~ s/^/$indent/gm;
-        $code      =~ s/^$self->{string}->{indent}*//;
-        my $coderef_exp = 'sub '.$code;
-        return $coderef_exp;
-    }
-    else { # 'ARRAY', 'HASH'
-        my $string_exp = Dumper $ref;
-        my $indent = $self->{string}->{indent} x ($self->{indent});
-        $string_exp      =~ s/^/$indent/gm;
-        $string_exp      =~ s/^$self->{string}->{indent}*//;
-        chomp($string_exp);
-        return $string_exp;
-    }
-}
-
-sub hash {
-    my ($self, $after, $before) = @_;
-
-    return sprintf "%s => %s", $after, $before;
-}
-
-sub indent {
-    my ($self, $str) = @_;
-
-    my $indent = $self->{string}->{indent} x $self->{indent};
-    return sprintf "%s%s,\n", $indent, $str;
-}
-
-sub curly_brace {
-    my ($self, $value) = @_;
-    my $indent = $self->{string}->{indent} x ($self->{indent} - 1);
-    sprintf "{\n%s%s}\n", $value, $indent;
-}
-
-sub curly_parentheses {
-    my ($self, $value) = @_;
-    my $indent = $self->{string}->{indent} x ($self->{indent} - 1);
-    sprintf "(\n%s%s)\n", $value, $indent;
-}
-
-sub _is_number {
-    my ($self, $val) = @_;
-    return ( B::svref_2object(\$val)->FLAGS & B::SVp_IOK ) ? 1 : 0;
-}
+#sub _resolve_var_name {
+#    my ($self, $args) = @_;
+#
+#    my $vars = $args;
+#    $vars = [$args] unless (ref $args eq 'ARRAY');
+#
+#    my @names;
+#    for my $var (@$vars) {
+#        if (index($var, '.') == -1) {
+#            push @names, sprintf "\$before->{%s}", $var;
+#        }
+#        else {
+#            (my $nest_exp = $var) =~ s/\./\}\->\{/g;
+#            push @names, sprintf "\$before->{%s}", $nest_exp;
+#        }
+#    }
+#
+#    \@names;
+#}
+#
 
 1;
 __END__

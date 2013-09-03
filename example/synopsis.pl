@@ -30,33 +30,6 @@ my $rules = {
 
 my $converter = Hash::Convert->new($rules);
 
-print $converter->rules;
-#{
-#(exists $before->{count})?
-#    (count => sub {
-#        $_[0] + 1;
-#    }->($before->{count})):
-#    (count => 1),
-#(exists $before->{item}->{cost} && exists $before->{item}->{discount})?
-#    (price => sub {
-#        my $cost = $_[0];
-#        my $discount = $_[1];
-#        return $cost * ( (100 - $discount) * 0.01 );
-#    }->($before->{item}->{cost}, $before->{item}->{discount})): (),
-#(exists $before->{created_at})?
-#    (visit => $before->{created_at}): (),
-#(exists $before->{name} && exists $before->{mail})?
-#    (visitor => {
-#    (exists $before->{mail})?
-#        (mail => $before->{mail}): (),
-#    (exists $before->{name})?
-#        (name => $before->{name}): (),
-#    }):
-#    (visitor => {
-#      'name' => 'anonymous',
-#      'mail' => 'anonymous'
-#    }),
-#}
 my $before = {
     created_at => time,
     count      => 1,
