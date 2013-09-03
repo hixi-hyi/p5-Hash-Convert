@@ -27,7 +27,7 @@ sub new {
         rules         => $rules,
     }, $class;
 
-    $self->_validate_rule($rules);
+    $self->_prepare($rules);
 
     $self;
 }
@@ -45,29 +45,30 @@ sub _validate_cmd {
     return 0;
 }
 
-sub _validate_rule {
+sub _prepare {
     my ($self, $rules) = @_;
 
     for my $name (sort keys %$rules) {
         my $rule = $rules->{$name};
         my %cmds = map { $_ => 1 } keys %{$rule};
 
-        my $valid = $self->_validate_cmd(\%cmds);
-        unless ($valid) {
+        unless ($self->_validate_cmd(\%cmds)) {
             croak sprintf "%s rules invalid combinations (%s)", $name, join(',', sort keys %cmds);
         }
-
         if ($cmds{contain}) {
-            $self->_validate_rule($rule->{contain});
+            $self->_prepare($rule->{contain});
+            $rule->{depends} = $self->_contain_depends($rule->{contain});
+            next;
         }
 
-        unless ($cmds{via}) {
+        if ($cmds{from} && not $cmds{via}) {
             if ( (ref $rule->{from} eq 'ARRAY') && (scalar @{$rule->{from}} != 1) ) {
                 croak sprintf "multiple value allowed only 'via' rule. ( from => [%s] )", join(', ', map { "'$_'" } @{$rule->{from}} );
             }
         }
-
-        $rule->{from} = [$rule->{from}] if ($rule->{from} && ref $rule->{from} ne 'ARRAY');
+        my $from = $rule->{from};
+        $from = [$from] if ($from && ref $from ne 'ARRAY');
+        $rule->{depends} = $from;
     }
 }
 
@@ -128,8 +129,8 @@ sub _is_exists {
 sub from {
     my ($self, $name, $rule, $before, $after) = @_;
 
-    if ($self->_is_exists($before, $rule->{from})) {
-        $after->{$name} = $before->{$rule->{from}->[0]};
+    if ($self->_is_exists($before, $rule->{depends})) {
+        $after->{$name} = $before->{$rule->{depends}->[0]};
     } elsif (exists $rule->{default}) {
         $after->{$name} = $rule->{default};
     }
@@ -138,8 +139,8 @@ sub from {
 sub via {
     my ($self, $name, $rule, $before, $after) = @_;
 
-    if ($self->_is_exists($before, $rule->{from})) {
-        my @args = map { $before->{$_} } @{$rule->{from}};
+    if ($self->_is_exists($before, $rule->{depends})) {
+        my @args = map { $before->{$_} } @{$rule->{depends}};
         $after->{$name} = $rule->{via}->(@args);
     } elsif (exists $rule->{default}) {
         $after->{$name} = $rule->{default};
@@ -154,8 +155,7 @@ sub define {
 sub contain {
     my ($self, $name, $rule, $before, $after) = @_;
 
-    my $depends_name = $self->_contain_depends($rule->{contain});
-    if ($self->_is_exists($before, $depends_name)) {
+    if ($self->_is_exists($before, $rule->{depends})) {
         $after->{$name} = $self->_process($rule->{contain}, $before);
     } elsif (exists $rule->{default}) {
         $after->{$name} = $rule->{default};
