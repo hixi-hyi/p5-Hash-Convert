@@ -118,7 +118,7 @@ sub _process {
 sub _is_exists {
     my ($self, $before, $names) = @_;
 
-    my $exists_size = grep { $before->{$_} } @$names;
+    my $exists_size = grep { $self->_resolve_value($before, $_) } @$names;
     if ($exists_size == scalar @$names) {
         return 1;
     }
@@ -130,7 +130,7 @@ sub from {
     my ($self, $name, $rule, $before, $after) = @_;
 
     if ($self->_is_exists($before, $rule->{depends})) {
-        $after->{$name} = $before->{$rule->{depends}->[0]};
+        $after->{$name} = $self->_resolve_value($before, $rule->{depends}->[0]);
     } elsif (exists $rule->{default}) {
         $after->{$name} = $rule->{default};
     }
@@ -140,7 +140,7 @@ sub via {
     my ($self, $name, $rule, $before, $after) = @_;
 
     if ($self->_is_exists($before, $rule->{depends})) {
-        my @args = map { $before->{$_} } @{$rule->{depends}};
+        my @args = map { $self->_resolve_value($before, $_) } @{$rule->{depends}};
         $after->{$name} = $rule->{via}->(@args);
     } elsif (exists $rule->{default}) {
         $after->{$name} = $rule->{default};
@@ -185,26 +185,16 @@ sub _contain_depends {
     return \@depends;
 }
 
-#sub _resolve_var_name {
-#    my ($self, $args) = @_;
-#
-#    my $vars = $args;
-#    $vars = [$args] unless (ref $args eq 'ARRAY');
-#
-#    my @names;
-#    for my $var (@$vars) {
-#        if (index($var, '.') == -1) {
-#            push @names, sprintf "\$before->{%s}", $var;
-#        }
-#        else {
-#            (my $nest_exp = $var) =~ s/\./\}\->\{/g;
-#            push @names, sprintf "\$before->{%s}", $nest_exp;
-#        }
-#    }
-#
-#    \@names;
-#}
-#
+sub _resolve_value {
+    my ($self, $before, $name) = @_;
+
+    my @struct = split /\./, $name;
+    my $value = $before;
+    for my $point (@struct) {
+        $value = $value->{$point};
+    }
+    return $value;
+}
 
 1;
 __END__
