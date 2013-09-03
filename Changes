@@ -2,6 +2,9 @@ Revision history for Perl extension Hash-Convert
 
 {{$NEXT}}
 
+0.02 2013-09-03T19:59:14Z
+    - support closure
+
 0.01 2013-08-21T06:02:30Z
 
     - original version
