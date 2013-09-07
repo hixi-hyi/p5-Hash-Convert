@@ -7,10 +7,10 @@ use Hash::Convert;
 
 sub verify {
     my (%specs) = @_;
-    my ($rules, $input, $expects, $desc) = @specs{qw/rules input expects desc/};
+    my ($rules, $options, $input, $expects, $desc) = @specs{qw/rules options input expects desc/};
 
     subtest $desc => sub {
-        my $converter = Hash::Convert->new($rules);
+        my $converter = Hash::Convert->new($rules, $options);
         my $result = $converter->convert($input);
         is_deeply $result, $expects;
         note explain $result;
@@ -20,10 +20,10 @@ sub verify {
 
 sub verify_hash {
     my (%specs) = @_;
-    my ($rules, $input, $expects, $desc) = @specs{qw/rules input expects desc/};
+    my ($rules, $options, $input, $expects, $desc) = @specs{qw/rules options input expects desc/};
 
     subtest $desc => sub {
-        my $converter = Hash::Convert->new($rules);
+        my $converter = Hash::Convert->new($rules, $options);
         my %result = $converter->convert(%{$input});
         is_deeply \%result, $expects;
         note explain \%result;
@@ -33,11 +33,11 @@ sub verify_hash {
 
 sub verify_error {
     my (%specs) = @_;
-    my ($rules, $input, $error, $desc) = @specs{qw/rules input error desc/};
+    my ($rules, $options, $input, $error, $desc) = @specs{qw/rules options input error desc/};
 
     subtest $desc => sub {
         throws_ok {
-            my $converter = Hash::Convert->new($rules);
+            my $converter = Hash::Convert->new($rules, $options);
             $converter->convert($input);
         } qr/$error/;
         done_testing;

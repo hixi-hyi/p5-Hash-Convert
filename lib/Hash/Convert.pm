@@ -21,13 +21,13 @@ my $allow_combine = [
 ];
 
 sub new {
-    my ($class, $rules) = @_;
+    my ($class, $rules, $opts) = @_;
 
     my $self = bless {
         rules         => $rules,
     }, $class;
 
-    $self->_prepare($rules);
+    $self->_prepare($rules, $opts);
 
     $self;
 }
@@ -45,8 +45,21 @@ sub _validate_cmd {
     return 0;
 }
 
+sub _prepare_opts {
+    my ($self, $rules, $opts) = @_;
+
+    if (my $pass = $opts->{pass}) {
+        $pass = [$pass] unless (ref $pass);
+        for my $name (@$pass) {
+            $rules->{$name} = { from => $name };
+        }
+    }
+}
+
 sub _prepare {
-    my ($self, $rules) = @_;
+    my ($self, $rules, $opts) = @_;
+
+    $self->_prepare_opts($rules, $opts);
 
     for my $name (sort keys %$rules) {
         my $rule = $rules->{$name};
@@ -70,6 +83,7 @@ sub _prepare {
         $from = [$from] if ($from && ref $from ne 'ARRAY');
         $rule->{depends} = $from;
     }
+
 }
 
 sub convert {
@@ -234,14 +248,16 @@ Hash::Convert - Rule based Hash converter.
           },
       },
   };
+  my $opts = { pass => 'locate' };
 
-  my $converter = Hash::Convert->new($rules);
+  my $converter = Hash::Convert->new($rules, $opts);
 
   my $before = {
       created_at => time,
       count      => 1,
       name       => 'hixi',
       mail       => 'hixi@cpan.org',
+      locate     => 'JP',
       item => {
           name     => 'chocolate',
           cost     => 100,
@@ -257,7 +273,8 @@ Hash::Convert - Rule based Hash converter.
   #    },
   #    'count' => 2,
   #    'visit' => '1377019766',
-  #    'price' => 9000
+  #    'price' => 90,
+  #    'locate' => 'JP'
   #}
 
 =head1 DESCRIPTION

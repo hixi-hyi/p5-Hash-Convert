@@ -31,14 +31,16 @@ Hash::Convert - Rule based Hash converter.
             },
         },
     };
+    my $opts = { pass => 'locate' };
 
-    my $converter = Hash::Convert->new($rules);
+    my $converter = Hash::Convert->new($rules, $opts);
 
     my $before = {
         created_at => time,
         count      => 1,
         name       => 'hixi',
         mail       => 'hixi@cpan.org',
+        locate     => 'JP',
         item => {
             name     => 'chocolate',
             cost     => 100,
@@ -54,7 +56,8 @@ Hash::Convert - Rule based Hash converter.
     #    },
     #    'count' => 2,
     #    'visit' => '1377019766',
-    #    'price' => 9000
+    #    'price' => 90,
+    #    'locate' => 'JP'
     #}
 
 # DESCRIPTION
