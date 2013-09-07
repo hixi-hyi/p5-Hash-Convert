@@ -5,7 +5,7 @@ use warnings;
 
 use Carp qw(croak);
 
-our $VERSION = "0.02";
+our $VERSION = "0.03";
 
 my $allow_combine = [
     [qw/from/],
