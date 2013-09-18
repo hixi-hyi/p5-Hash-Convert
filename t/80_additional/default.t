@@ -27,6 +27,13 @@ verify(
 );
 
 verify(
+    rules   => { time => { from => 'time', default => sub { 1 } } },
+    input   => {},
+    expects => { time => 1 },
+    desc    => 'ref code',
+);
+
+verify(
     rules   => { human => {
                     contain => {
                         name => { from => 'name' },

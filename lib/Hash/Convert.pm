@@ -155,7 +155,7 @@ sub from {
     if ($self->_is_all_exists($before, $rule->{depends})) {
         $after->{$name} = $self->_resolve_value($before, $rule->{depends}->[0]);
     } elsif (exists $rule->{default}) {
-        $after->{$name} = $rule->{default};
+        $after->{$name} = $self->default($rule->{default});
     }
 }
 
@@ -166,7 +166,7 @@ sub via {
         my @args = map { $self->_resolve_value($before, $_) } @{$rule->{depends}};
         $after->{$name} = $rule->{via}->(@args);
     } elsif (exists $rule->{default}) {
-        $after->{$name} = $rule->{default};
+        $after->{$name} = $self->default($rule->{default});
     }
 }
 
@@ -181,8 +181,17 @@ sub contain {
     if ($self->_is_any_exists($before, $rule->{depends})) {
         $after->{$name} = $self->_process($rule->{contain}, $before);
     } elsif (exists $rule->{default}) {
-        $after->{$name} = $rule->{default};
+        $after->{$name} = $self->default($rule->{default});
     }
+}
+
+sub default {
+    my ($self, $default) = @_;
+
+    if (ref $default eq 'CODE') {
+        return $default->();
+    }
+    return $default;
 }
 
 sub _resolve_depends {
