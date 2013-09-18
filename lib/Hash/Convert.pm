@@ -129,21 +129,30 @@ sub _process {
     return \%after;
 }
 
-sub _is_exists {
+sub _is_all_exists {
     my ($self, $before, $names) = @_;
 
-    my $exists_size = grep { $self->_resolve_value($before, $_) } @$names;
+    my $exists_size = grep { $self->_resolve_exists($before, $_) } @$names;
     if ($exists_size == scalar @$names) {
         return 1;
     }
     return 0;
 }
 
+sub _is_any_exists {
+    my ($self, $before, $names) = @_;
+
+    my $exists_size = grep { $self->_resolve_exists($before, $_) } @$names;
+    if ( 0 < $exists_size ) {
+        return 1;
+    }
+    return 0;
+}
 
 sub from {
     my ($self, $name, $rule, $before, $after) = @_;
 
-    if ($self->_is_exists($before, $rule->{depends})) {
+    if ($self->_is_all_exists($before, $rule->{depends})) {
         $after->{$name} = $self->_resolve_value($before, $rule->{depends}->[0]);
     } elsif (exists $rule->{default}) {
         $after->{$name} = $rule->{default};
@@ -153,7 +162,7 @@ sub from {
 sub via {
     my ($self, $name, $rule, $before, $after) = @_;
 
-    if ($self->_is_exists($before, $rule->{depends})) {
+    if ($self->_is_all_exists($before, $rule->{depends})) {
         my @args = map { $self->_resolve_value($before, $_) } @{$rule->{depends}};
         $after->{$name} = $rule->{via}->(@args);
     } elsif (exists $rule->{default}) {
@@ -169,7 +178,7 @@ sub define {
 sub contain {
     my ($self, $name, $rule, $before, $after) = @_;
 
-    if ($self->_is_exists($before, $rule->{depends})) {
+    if ($self->_is_any_exists($before, $rule->{depends})) {
         $after->{$name} = $self->_process($rule->{contain}, $before);
     } elsif (exists $rule->{default}) {
         $after->{$name} = $rule->{default};
@@ -208,6 +217,19 @@ sub _resolve_value {
         $value = $value->{$point};
     }
     return $value;
+}
+
+sub _resolve_exists {
+    my ($self, $before, $name) = @_;
+
+    my $is_exists = 0;
+    my @struct = split /\./, $name;
+    my $value = $before;
+    for my $point (@struct) {
+        $is_exists = exists $value->{$point};
+        $value = $value->{$point};
+    }
+    return $is_exists;
 }
 
 1;
