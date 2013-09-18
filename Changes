@@ -2,6 +2,11 @@ Revision history for Perl extension Hash-Convert
 
 {{$NEXT}}
 
+0.04 2013-09-18T04:40:15Z
+    - support default to nested(contain) 'from'
+    - support coderef to 'default'
+    - (bugfix) support any exists to 'contain'
+
 0.03 2013-09-07T11:10:19Z
     - add pass option
 
